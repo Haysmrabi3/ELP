@@ -7,7 +7,7 @@ from passlib.context import CryptContext
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.middleware.cors import CORSMiddleware  # 👈 جديد
+from fastapi.middleware.cors import CORSMiddleware
 
 # =========================
 # ⚙️ إعدادات
@@ -17,10 +17,10 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# 👇 CORS (عشان الفرونت يشتغل)
+# 👇 CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # بعدين غيرها للـ domain بتاعك
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,16 +54,17 @@ def get_db():
         db.close()
 
 # =========================
-# 🔐 Password
+# 🔐 Password (FIX النهائي)
 # =========================
 
 def get_password_hash(password: str):
-    password = str(password).strip()[:72]  # 👈 FIX
-    return pwd_context.hash(password)
+    password_bytes = password.encode("utf-8")[:72]  # 👈 الحل
+    return pwd_context.hash(password_bytes)
+
 
 def verify_password(plain_password: str, hashed_password: str):
-    plain_password = str(plain_password).strip()[:72]  # 👈 FIX
-    return pwd_context.verify(plain_password, hashed_password)
+    plain_bytes = plain_password.encode("utf-8")[:72]  # 👈 الحل
+    return pwd_context.verify(plain_bytes, hashed_password)
 
 # =========================
 # 🔑 JWT
@@ -121,7 +122,7 @@ def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="User already exists")
 
     try:
-        hashed_password = get_password_hash(user.password)  # 👈 متظبط خلاص
+        hashed_password = get_password_hash(user.password)
 
         new_user = models.User(
             username=user.username,
