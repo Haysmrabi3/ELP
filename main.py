@@ -7,6 +7,7 @@ from passlib.context import CryptContext
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.middleware.cors import CORSMiddleware  # 👈 جديد
 
 # =========================
 # ⚙️ إعدادات
@@ -15,6 +16,15 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+# 👇 CORS (عشان الفرونت يشتغل)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # بعدين غيرها للـ domain بتاعك
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -25,7 +35,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 security = HTTPBearer()
 
 # =========================
-# 🏠 ROOT (حل المشكلة)
+# 🏠 ROOT
 # =========================
 
 @app.get("/")
@@ -48,11 +58,11 @@ def get_db():
 # =========================
 
 def get_password_hash(password: str):
-    password = str(password)[:72]
+    password = str(password).strip()[:72]  # 👈 FIX
     return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str):
-    plain_password = str(plain_password)[:72]
+    plain_password = str(plain_password).strip()[:72]  # 👈 FIX
     return pwd_context.verify(plain_password, hashed_password)
 
 # =========================
@@ -111,7 +121,7 @@ def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="User already exists")
 
     try:
-        hashed_password = get_password_hash(user.password)
+        hashed_password = get_password_hash(user.password)  # 👈 متظبط خلاص
 
         new_user = models.User(
             username=user.username,
@@ -218,7 +228,7 @@ def delete_course(
     courses = db.query(models.Course).filter(
         models.Course.title.ilike(f"%{name}%"),
         models.Course.price == price,
-        models.Course.is_deleted == False   # ✅ FIXED
+        models.Course.is_deleted == False
     ).all()
 
     if not courses:
