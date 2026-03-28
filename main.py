@@ -26,6 +26,16 @@ def get_db():
     finally:
         db.close()
 
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  
+    allow_credentials=True,
+    allow_methods=["*"],  
+    allow_headers=["*"],
+)
+
 # --- Password ---
 def get_password_hash(password: str):
     password = str(password)[:72]
