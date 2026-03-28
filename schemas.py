@@ -1,55 +1,36 @@
-from pydantic import BaseModel, constr, EmailStr
-
-# =========================
-# 👤 USER
-# =========================
+from pydantic import BaseModel, EmailStr
+from typing import Optional, List
 
 class UserCreate(BaseModel):
     username: str
-    email: EmailStr  # 👈 يتحقق إنه email صح
-    password: constr(min_length=6, max_length=72)  # 👈 حل مشكلة bcrypt + أمان أفضل
+    email: EmailStr # لضمان صحة صيغة الإيميل وتجنب خطأ 500
+    password: str
     role: str = "student"
-
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
-
 class UserOut(BaseModel):
     id: int
     username: str
-    email: EmailStr
-
-    class Config:
-        from_attributes = True  # 👈 مهم مع SQLAlchemy
-
-
-# =========================
-# 🎓 COURSES
-# =========================
-
+    email: str
+    role: str
+    
 class CourseCreate(BaseModel):
     title: str
-    description: str
-    price: int
-    level: str
+    instructor: str
+    rating: float
+    reviews: int
+    category: str
+    price_type: str
+    popular: int
+    date: str
+    image: str
+    description: Optional[str] = None
 
-
-class CourseOut(BaseModel):
+class CourseOut(CourseCreate):
     id: int
-    title: str
-    description: str
-    price: int
-    level: str
-
-    class Config:
-        from_attributes = True
-
-
-# =========================
-# 📚 ENROLLMENT
-# =========================
-
+    
 class EnrollmentCreate(BaseModel):
     course_id: int
