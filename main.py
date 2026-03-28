@@ -4,27 +4,13 @@ from typing import Optional
 from database import SessionLocal, engine
 import models, schemas
 from passlib.context import CryptContext
-from jose import jwt, JWTError
+from jose import jwt
 from datetime import datetime, timedelta
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.middleware.cors import CORSMiddleware
 
-# =========================
-# ⚙️ إعدادات
-# =========================
-
+# --- إعدادات ---
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
-
-# 👇 CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -32,20 +18,7 @@ SECRET_KEY = "my_super_secret_key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-security = HTTPBearer()
-
-# =========================
-# 🏠 ROOT
-# =========================
-
-@app.get("/")
-def root():
-    return {"message": "API is running 🚀"}
-
-# =========================
-# 🗄️ DB
-# =========================
-
+# --- DB ---
 def get_db():
     db = SessionLocal()
     try:
@@ -53,29 +26,32 @@ def get_db():
     finally:
         db.close()
 
-# =========================
-# 🔐 Password (FIX النهائي)
-# =========================
-
+# --- Password ---
 def get_password_hash(password: str):
-    password_bytes = password.encode("utf-8")[:72]  # 👈 الحل
-    return pwd_context.hash(password_bytes)
-
+    password = str(password)[:72]
+    return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str):
-    plain_bytes = plain_password.encode("utf-8")[:72]  # 👈 الحل
-    return pwd_context.verify(plain_bytes, hashed_password)
+    plain_password = str(plain_password)[:72]
+    return pwd_context.verify(plain_password, hashed_password)
 
-# =========================
-# 🔑 JWT
-# =========================
-
+# --- JWT ---
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
+# =========================
+# 🔐 AUTH
+# =========================
+
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import jwt, JWTError
+
+security = HTTPBearer()
+
+ 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
@@ -106,9 +82,6 @@ def require_instructor(user: models.User = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Only instructors allowed")
     return user
 
-# =========================
-# 🔐 AUTH
-# =========================
 
 @app.post("/signup")
 def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
@@ -173,7 +146,7 @@ def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
 def create_course(
     course: schemas.CourseCreate,
     db: Session = Depends(get_db),
-    instructor: models.User = Depends(require_instructor)
+    instructor: models.User = Depends(require_instructor)  
 ):
     new_course = models.Course(**course.dict())
     db.add(new_course)
@@ -183,28 +156,8 @@ def create_course(
 
 
 @app.get("/courses", response_model=list[schemas.CourseOut])
-def get_courses(
-    db: Session = Depends(get_db),
-    min_price: Optional[int] = Query(None),
-    max_price: Optional[int] = Query(None),
-    level: Optional[str] = Query(None),
-    search: Optional[str] = Query(None)
-):
-    query = db.query(models.Course)
-
-    if min_price is not None:
-        query = query.filter(models.Course.price >= min_price)
-
-    if max_price is not None:
-        query = query.filter(models.Course.price <= max_price)
-
-    if level:
-        query = query.filter(models.Course.level == level)
-
-    if search:
-        query = query.filter(models.Course.title.contains(search))
-
-    return query.all()
+def get_courses(db: Session = Depends(get_db)):
+    return db.query(models.Course).filter(models.Course.is_deleted == False).all()
 
 
 @app.get("/courses/{name}")
@@ -218,18 +171,18 @@ def search_course(name: str, db: Session = Depends(get_db)):
 
     return courses
 
-
 @app.delete("/courses")
 def delete_course(
     name: str,
     price: float,
     db: Session = Depends(get_db),
-    instructor: models.User = Depends(require_instructor)
+    current_user: str = Depends(get_current_user),
+    instructor: models.User=Depends(require_instructor) 
 ):
     courses = db.query(models.Course).filter(
         models.Course.title.ilike(f"%{name}%"),
         models.Course.price == price,
-        models.Course.is_deleted == False
+        models.User.is_deleted==False
     ).all()
 
     if not courses:
@@ -249,7 +202,7 @@ def enroll_course(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user)
 ):
-
+    
     course = db.query(models.Course).filter(
         models.Course.id == data.course_id,
         models.Course.is_deleted == False
@@ -258,6 +211,7 @@ def enroll_course(
     if not course:
         raise HTTPException(404, "Course not found")
 
+    
     existing = db.query(models.Enrollment).filter(
         models.Enrollment.user_id == user.id,
         models.Enrollment.course_id == data.course_id
@@ -276,7 +230,6 @@ def enroll_course(
 
     return {"message": "Enrolled successfully"}
 
-
 @app.get("/my-courses")
 def my_courses(
     db: Session = Depends(get_db),
@@ -289,7 +242,6 @@ def my_courses(
     courses = [en.course for en in enrollments if not en.course.is_deleted]
 
     return courses
-
 
 @app.delete("/unenroll/{course_id}")
 def unenroll(
